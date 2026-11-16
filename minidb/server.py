@@ -6,6 +6,7 @@ import hmac
 import json
 import logging
 import socket
+from socketserver import TCPServer
 import threading
 import time
 
@@ -37,6 +38,12 @@ class PoolHTTPServer(HTTPServer):
         except Exception:
             self.pool.shutdown(wait=True)
             raise
+
+    def server_bind(self):
+        # The bound address is sufficient for MiniDB. HTTPServer.server_bind
+        # also does a synchronous reverse DNS lookup before it starts listening.
+        TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
 
     def increment(self, key):
         with self.metrics_lock:

@@ -6,6 +6,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest.mock import patch
 
 from minidb import Database
 from minidb.server import MAX_BODY, PoolHTTPServer
@@ -43,6 +44,11 @@ class ServerTests(unittest.TestCase):
             while data := connection.recv(65536):
                 chunks.append(data)
         return b"".join(chunks)
+
+    def test_server_binds_without_reverse_dns(self):
+        with patch("socket.gethostbyaddr", side_effect=AssertionError("unexpected reverse DNS lookup")):
+            with PoolHTTPServer(("127.0.0.1", 0), self.db) as server:
+                self.assertGreater(server.server_port, 0)
 
     def test_health_query_metrics_and_errors(self):
         self.assertEqual(self.request("/health", method="GET")[0], 200)
