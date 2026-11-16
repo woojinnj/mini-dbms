@@ -36,6 +36,12 @@ INSERT 결과:
 {"result":{"command":"INSERT","affected_rows":2,"first_id":1,"last_id":2,"elapsed_ms":0.5}}
 ```
 
+`CREATE TABLE products (name TEXT NOT NULL)`의 결과:
+
+```json
+{"result":{"command":"CREATE TABLE","table":"products","elapsed_ms":0.7}}
+```
+
 요청당 SQL 문장 하나만 허용합니다. 다중 문장은 쓰기를 시작하기 전에 거부합니다. 여러 행을 넣으려면 단일 `INSERT ... VALUES (...), (...)`를 사용하세요.
 
 결과 행이 제한을 넘으면 `truncated: true`입니다. ID를 포함해 조회하고 마지막 ID보다 큰 범위를 다음 요청에 사용하세요. 이 페이지 방식은 현재 INSERT-only 모델에 적합하며 여러 요청을 하나의 snapshot으로 고정하지는 않습니다.

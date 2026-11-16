@@ -122,6 +122,12 @@ function renderResult(result) {
   } else if (result.command === "INSERT") {
     const ids = result.first_id === result.last_id ? result.first_id : `${result.first_id}–${result.last_id}`;
     status.textContent = `${number.format(result.affected_rows)}행 추가 · ID ${ids}`;
+  } else if (result.command === "CREATE TABLE") {
+    if (![...tables.options].some((option) => option.value === result.table)) {
+      tables.add(new Option(result.table, result.table));
+    }
+    tablePicker.hidden = false;
+    status.textContent = `${result.table} 테이블을 만들었습니다.`;
   } else if (result.command === "EXPLAIN") {
     renderTable(["테이블", "실행 계획", "인덱스", "테이블 행 수"], [{
       "테이블": result.table,

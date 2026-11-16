@@ -67,6 +67,23 @@ class ServerTests(unittest.TestCase):
                 self.assertEqual(self.request(payload=payload)[0], 400)
         self.assertEqual(self.request(payload={"sql": "SELECT * FROM users"}, headers={"Content-Type": "text/plain"})[0], 415)
 
+    def test_browser_query_can_create_and_use_table(self):
+        status, body = self.request(
+            payload={"sql": "CREATE TABLE products (id INTEGER PRIMARY KEY, name TEXT NOT NULL);"},
+            headers={"Content-Type": "application/json", "Accept": UI_JSON},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(body["result"]["command"], "CREATE TABLE")
+        self.assertEqual(body["result"]["table"], "products")
+        _, health = self.request("/health", method="GET")
+        self.assertIn("products", health["tables"])
+
+        status, _ = self.request(payload={"sql": "INSERT INTO products (name) VALUES ('keyboard');"})
+        self.assertEqual(status, 200)
+        status, body = self.request(payload={"sql": "SELECT * FROM products;"})
+        self.assertEqual(status, 200)
+        self.assertEqual(body["result"]["rows"], [{"id": 1, "name": "keyboard"}])
+
     def test_http_body_validation(self):
         cases = [
             (b"POST /query HTTP/1.1\r\nHost: localhost\r\n\r\n", 411),

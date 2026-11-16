@@ -16,6 +16,19 @@ TOKEN = re.compile(
 
 
 @dataclass(frozen=True)
+class ColumnDefinition:
+    name: str
+    kind: str
+    constraint: str | None
+
+
+@dataclass(frozen=True)
+class CreateTable:
+    table: str
+    columns: tuple[ColumnDefinition, ...]
+
+
+@dataclass(frozen=True)
 class Insert:
     table: str
     columns: tuple | None
@@ -108,7 +121,9 @@ class Parser:
         while self.tokens[self.i][0] != "eof":
             if self.take(";"):
                 continue
-            if self.take("INSERT"):
+            if self.take("CREATE"):
+                statements.append(self.create_table())
+            elif self.take("INSERT"):
                 statements.append(self.insert())
             else:
                 explain = self.take("EXPLAIN")
@@ -119,6 +134,29 @@ class Parser:
         if not statements:
             raise ParseError("No SQL statement supplied")
         return statements
+
+    def create_table(self):
+        self.expect("TABLE")
+        table = self.identifier()
+        self.expect("(")
+        columns = []
+        while True:
+            name = self.identifier()
+            kind = self.identifier().upper()
+            constraint = None
+            if self.take("PRIMARY"):
+                self.expect("KEY")
+                constraint = "PRIMARY KEY"
+            elif self.take("NOT"):
+                self.expect("NULL")
+                constraint = "NOT NULL"
+            elif self.take("NULL"):
+                constraint = "NULL"
+            columns.append(ColumnDefinition(name, kind, constraint))
+            if not self.take(","):
+                break
+        self.expect(")")
+        return CreateTable(table, tuple(columns))
 
     def insert(self):
         self.expect("INTO")

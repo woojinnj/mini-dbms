@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 from minidb import Database
 from minidb.errors import DBError, StorageError, ValidationError
+from minidb.schema import DEFAULT_SCHEMA
 from minidb.storage import MAGIC, TRANSACTION, TRAILER
 
 
@@ -107,6 +108,59 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(self.db.execute("SELECT name FROM users WHERE id = 3")["rows"], [{"name": "다"}])
         self.assertEqual(self.db.execute("INSERT INTO users VALUES ('new', 1, NULL)")["first_id"], 4)
         self.assertTrue(self.db.tables["users"].index.validate())
+
+    def test_created_table_survives_restart_with_initial_schema(self):
+        self.seed()
+        self.db.execute("CREATE TABLE products (id INTEGER PRIMARY KEY, name TEXT NOT NULL, price REAL NULL)")
+        self.db.execute("INSERT INTO products (name) VALUES ('keyboard')")
+        self.db.close()
+        with Database(self.temp.name, DEFAULT_SCHEMA, durable=False) as reopened:
+            self.assertEqual(reopened.execute("SELECT * FROM products WHERE id = 1")["rows"],
+                             [{"id": 1, "name": "keyboard", "price": None}])
+            self.assertEqual(reopened.execute("SELECT COUNT(*) FROM users")["rows"], [{"count": 3}])
+            with self.assertRaisesRegex(ValidationError, "cannot be NULL"):
+                reopened.execute("INSERT INTO products VALUES (NULL, 12.5)")
+
+    def test_create_table_validation_leaves_catalog_unchanged(self):
+        for definition in (
+            "name TEXT, NAME TEXT",
+            "id TEXT PRIMARY KEY, name TEXT",
+            "name TEXT PRIMARY KEY",
+            "name UNKNOWN",
+        ):
+            with self.subTest(definition=definition), self.assertRaises(ValidationError):
+                self.db.execute(f"CREATE TABLE products ({definition})")
+        self.assertEqual(self.db.table_names(), ["users"])
+        self.assertFalse((Path(self.temp.name) / "products.mdb").exists())
+
+    def test_create_can_retry_after_uncommitted_schema_write(self):
+        sql = "CREATE TABLE products (name TEXT)"
+        with patch.object(self.db, "_write_schema", side_effect=OSError("disk failure")):
+            with self.assertRaises(StorageError):
+                self.db.execute(sql)
+        self.assertEqual(self.db.table_names(), ["users"])
+        self.db.close()
+        with Database(self.temp.name, durable=False) as reopened:
+            self.assertEqual(reopened.table_names(), ["users"])
+            reopened.execute(sql)
+            self.assertEqual(reopened.table_names(), ["users", "products"])
+
+    def test_concurrent_creates_persist_once_per_table(self):
+        def create(name):
+            try:
+                self.db.execute(f"CREATE TABLE {name} (name TEXT)")
+                return name
+            except ValidationError as error:
+                self.assertIn("Table already exists", str(error))
+                return None
+
+        names = [f"table_{i}" for i in range(8)]
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            created = list(pool.map(create, names * 2))
+        self.assertCountEqual([name for name in created if name], names)
+        self.db.close()
+        with Database(self.temp.name, durable=False) as reopened:
+            self.assertCountEqual(reopened.table_names(), ["users", *names])
 
     def test_process_lock(self):
         process = subprocess.run([sys.executable, "-m", "minidb", "--data-dir", self.temp.name,

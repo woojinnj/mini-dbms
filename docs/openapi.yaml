@@ -12,7 +12,7 @@ paths:
   /query:
     post:
       operationId: executeSQL
-      summary: Execute one INSERT, SELECT or EXPLAIN SELECT statement
+      summary: Execute one CREATE TABLE, INSERT, SELECT or EXPLAIN SELECT statement
       requestBody:
         required: true
         content:
@@ -134,7 +134,7 @@ components:
       properties:
         command:
           type: string
-          enum: [SELECT, INSERT, EXPLAIN]
+          enum: [CREATE TABLE, SELECT, INSERT, EXPLAIN]
         elapsed_ms:
           type: number
         columns:

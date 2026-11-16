@@ -9,7 +9,7 @@ flowchart LR
     HTTP --> Pool[제한된 Thread Pool]
     CLI --> Parser[Tokenizer + Parser]
     Pool --> Parser
-    Parser --> AST[Insert / Select AST]
+    Parser --> AST[CreateTable / Insert / Select AST]
     AST --> Engine[검증 + 실행 계획]
     Engine --> Lock[테이블 RWLock]
     Lock --> Tree[B+ Tree: ID → 파일 오프셋]
@@ -27,7 +27,7 @@ CLI와 HTTP가 공유하는 진입점은 `Database`입니다. API는 `Database.e
 1. 문자열 리터럴·숫자·식별자·구분 기호를 토큰으로 나눕니다. 문자열 안의 세미콜론은 문장 경계가 아닙니다.
 2. `INSERT INTO ... VALUES ...`를 `Insert(table, columns, rows)`로 만듭니다.
 3. `SELECT ... WHERE ...`를 `Select(table, columns, conditions, limit, count, explain)`로 만듭니다.
-4. executor가 실제 스키마와 값 타입을 검증한 후 저장 또는 조회합니다.
+4. `CREATE TABLE ... (...)`을 `CreateTable(table, columns)`로 만듭니다. executor가 스키마와 값 타입을 검증하고 명령을 실행합니다.
 
 문법 검증과 의미 검증을 분리했습니다. `SELECT missing FROM users`는 문법상 가능하지만 스키마 검증에서 거부됩니다. `eval`이나 실행 가능한 코드 변환을 사용하지 않습니다.
 
@@ -101,6 +101,8 @@ INSERT는 다음 순서로 처리합니다.
 일반적인 쓰기 예외가 발생하면 시작 오프셋으로 truncate하고 인덱스를 재구성합니다. 복구 작업도 실패하면 해당 테이블을 사용 불가 상태로 만들어 추가 읽기/쓰기를 막습니다. 이때는 로그와 저장 장치를 확인하고 재시작해야 합니다.
 
 재시작 시에는 프레임의 헤더·전체 체크섬·레코드 체크섬·스키마·연속 ID를 검증하면서 인덱스를 재구성합니다. 파일 끝의 불완전한 프레임은 전체를 제거합니다. 완성된 프레임의 체크섬 오류와 손상된 완전한 헤더는 자동 삭제하지 않고 오류로 보고합니다. 프레임 길이 자체도 별도 체크섬으로 보호하여 길이 필드 손상을 불완전한 쓰기로 오인하지 않도록 했습니다.
+
+`CREATE TABLE`은 스키마 잠금 안에서 빈 테이블 파일을 먼저 저장한 뒤 `schema.json`을 원자적으로 교체합니다. 스키마가 교체되기 전에 중단되어 빈 테이블 파일이 남았다면 같은 테이블 만들기를 재시도할 수 있습니다.
 
 **보장 경계:** 단일 INSERT의 행들은 함께 복구되거나 함께 제거됩니다. 완전한 프레임을 쓴 뒤 응답 전에 종료하면 클라이언트가 성공을 못 받았어도 저장은 완료됐을 수 있습니다. 요청 재시도의 exactly-once 보장이나 idempotency key는 없습니다. CRC32는 우발적 손상 검출용이며 악의적 변조를 막는 인증 수단은 아닙니다. fsync의 실제 전원 장애 내구성은 OS/파일시스템/장치의 보장에도 의존합니다.
 

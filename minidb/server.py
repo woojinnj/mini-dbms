@@ -169,7 +169,7 @@ class QueryHandler(BaseHTTPRequestHandler):
         if not self.authorized():
             return
         if self.path == "/health":
-            self.reply(200, {"status": "ok", "tables": list(self.server.database.tables)})
+            self.reply(200, {"status": "ok", "tables": self.server.database.table_names()})
         elif self.path == "/metrics":
             self.reply(200, self.server.snapshot())
         else:

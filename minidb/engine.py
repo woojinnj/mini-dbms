@@ -3,12 +3,13 @@ import json
 import operator
 import os
 from pathlib import Path
+from threading import Lock
 import time
 
 from .errors import StorageError, ValidationError
 from .schema import DEFAULT_SCHEMA, MAX_INT, validate_schema, validate_value
-from .sql import Insert, parse
-from .storage import Table
+from .sql import CreateTable, Insert, parse
+from .storage import MAGIC, Table
 
 COMPARISONS = {"=": operator.eq, "!=": operator.ne, "<>": operator.ne,
                "<": operator.lt, "<=": operator.le, ">": operator.gt, ">=": operator.ge}
@@ -23,7 +24,9 @@ class Database:
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
         self.max_result_rows = max_result_rows
+        self.durable = durable
         self.closed = False
+        self._catalog_lock = Lock()
         self._lock_file = (self.directory / ".lock").open("a+b")
         try:
             fcntl.flock(self._lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -34,8 +37,10 @@ class Database:
             schema_path = self.directory / "schema.json"
             if schema_path.exists():
                 stored = validate_schema(json.loads(schema_path.read_text(encoding="utf-8")))
-                if schema is not None and schema != stored:
-                    raise ValidationError("Provided schema differs from the persisted schema")
+                if schema is not None:
+                    provided = validate_schema(schema)
+                    if any(stored.get(name) != columns for name, columns in provided.items()):
+                        raise ValidationError("Provided schema differs from the persisted schema")
                 self.schema = stored
                 for name in stored:
                     if not (self.directory / f"{name}.mdb").is_file():
@@ -44,21 +49,10 @@ class Database:
                 if any(self.directory.glob("*.mdb")):
                     raise StorageError("Schema is missing while table files exist; restore schema.json from backup")
                 self.schema = validate_schema(json.loads(json.dumps(schema if schema is not None else DEFAULT_SCHEMA)))
-                temporary = self.directory / "schema.json.tmp"
-                with temporary.open("w", encoding="utf-8") as file:
-                    json.dump(self.schema, file, ensure_ascii=False, indent=2)
-                    file.flush()
-                    if durable:
-                        os.fsync(file.fileno())
-                temporary.replace(schema_path)
+                self._write_schema(self.schema)
             self.tables = {name: Table(self.directory / f"{name}.mdb", columns, durable)
                            for name, columns in self.schema.items()}
-            if durable:
-                descriptor = os.open(self.directory, os.O_RDONLY)
-                try:
-                    os.fsync(descriptor)
-                finally:
-                    os.close(descriptor)
+            self._sync_directory()
         except Exception:
             self.close()
             raise
@@ -75,6 +69,27 @@ class Database:
     def __exit__(self, *args):
         self.close()
 
+    def _write_schema(self, schema):
+        temporary = self.directory / "schema.json.tmp"
+        with temporary.open("w", encoding="utf-8") as file:
+            json.dump(schema, file, ensure_ascii=False, indent=2)
+            file.flush()
+            if self.durable:
+                os.fsync(file.fileno())
+        temporary.replace(self.directory / "schema.json")
+
+    def _sync_directory(self):
+        if self.durable:
+            descriptor = os.open(self.directory, os.O_RDONLY)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+
+    def table_names(self):
+        with self._catalog_lock:
+            return list(self.tables)
+
     def execute(self, sql):
         """Exactly one statement, suitable for an API request."""
         statements = parse(sql)
@@ -90,22 +105,58 @@ class Database:
         if self.closed:
             raise StorageError("Database is closed")
         start = time.perf_counter()
-        if statement.table not in self.tables:
-            raise ValidationError(f"Unknown table: {statement.table}")
-        table = self.tables[statement.table]
         try:
-            if isinstance(statement, Insert):
-                with table.lock.write():
-                    result = self._insert(table, statement)
+            if isinstance(statement, CreateTable):
+                result = self._create_table(statement)
             else:
-                with table.lock.read():
-                    if table.poisoned:
-                        raise StorageError("Table unavailable after an I/O failure")
-                    result = self._select(table, statement)
+                with self._catalog_lock:
+                    table = self.tables.get(statement.table)
+                if table is None:
+                    raise ValidationError(f"Unknown table: {statement.table}")
+                if isinstance(statement, Insert):
+                    with table.lock.write():
+                        result = self._insert(table, statement)
+                else:
+                    with table.lock.read():
+                        if table.poisoned:
+                            raise StorageError("Table unavailable after an I/O failure")
+                        result = self._select(table, statement)
         except OSError as error:
             raise StorageError(f"Storage I/O failed: {error.strerror}") from error
         result["elapsed_ms"] = round((time.perf_counter() - start) * 1000, 4)
         return result
+
+    def _create_table(self, statement):
+        definitions = {column.name: column for column in statement.columns}
+        if len(definitions) != len(statement.columns):
+            raise ValidationError("Duplicate CREATE TABLE column")
+        id_column = definitions.pop("id", None)
+        if id_column is not None and (id_column.kind, id_column.constraint) != ("INTEGER", "PRIMARY KEY"):
+            raise ValidationError("id must be declared as INTEGER PRIMARY KEY or omitted")
+        if any(column.constraint == "PRIMARY KEY" for column in definitions.values()):
+            raise ValidationError("Only id may be the PRIMARY KEY")
+        columns = {
+            column.name: {"type": column.kind, "nullable": column.constraint != "NOT NULL"}
+            for column in definitions.values()
+        }
+        name = statement.table
+        validate_schema({name: columns})
+
+        with self._catalog_lock:
+            if name in self.tables:
+                raise ValidationError(f"Table already exists: {name}")
+            path = self.directory / f"{name}.mdb"
+            # An interrupted CREATE can leave an empty file before the schema is committed.
+            if path.exists() and path.stat().st_size != len(MAGIC):
+                raise StorageError(f"Unregistered table file contains data: {path.name}")
+            table = Table(path, columns, self.durable)
+            self._sync_directory()
+            schema = {**self.schema, name: columns}
+            self._write_schema(schema)
+            self.schema = schema
+            self.tables[name] = table
+            self._sync_directory()
+        return {"command": "CREATE TABLE", "table": name}
 
     def _insert(self, table, statement):
         columns = statement.columns if statement.columns is not None else tuple(table.columns)

@@ -34,11 +34,13 @@ class Table:
         self.recovered_bytes = 0
         self.poisoned = False
         if not path.exists():
-            with path.open("xb") as file:
+            temporary = path.with_suffix(".mdb.tmp")
+            with temporary.open("wb") as file:
                 file.write(MAGIC)
                 file.flush()
                 if durable:
                     os.fsync(file.fileno())
+            temporary.replace(path)
         self.index = BPlusTree(order)
         self.next_id = 1
         self.rebuild(recover=True)

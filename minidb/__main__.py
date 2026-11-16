@@ -24,7 +24,9 @@ def emit(result, output):
     if output == "json":
         print(json.dumps(result, ensure_ascii=False))
         return
-    if result["command"] == "INSERT":
+    if result["command"] == "CREATE TABLE":
+        print(f"CREATE TABLE {result['table']}")
+    elif result["command"] == "INSERT":
         print(f"INSERT {result['affected_rows']} (IDs {result['first_id']}..{result['last_id']})")
     elif result["command"] == "EXPLAIN":
         print(json.dumps(result, ensure_ascii=False, indent=2))
