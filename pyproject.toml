@@ -15,3 +15,6 @@ minidb = "minidb.__main__:main"
 
 [tool.setuptools.packages.find]
 include = ["minidb*"]
+
+[tool.setuptools.package-data]
+minidb = ["web/*.html", "web/*.css", "web/*.js"]

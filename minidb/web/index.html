@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MiniDB</title>
+  <link rel="stylesheet" href="/ui.css">
+  <script src="/ui.js" defer></script>
+</head>
+<body>
+  <main class="workspace">
+    <header class="workspace-header">
+      <h1>MiniDB</h1>
+      <label class="table-picker" id="table-picker" hidden>
+        <span>테이블</span>
+        <select id="tables" aria-label="테이블"></select>
+      </label>
+    </header>
+
+    <form class="auth" id="auth" hidden>
+      <label for="token">API 토큰</label>
+      <input id="token" type="password" autocomplete="off" required>
+      <button class="secondary" type="submit">연결</button>
+    </form>
+
+    <form id="query">
+      <div class="section-heading">
+        <label class="section-title" for="sql">SQL</label>
+        <button class="run" id="run" type="submit" aria-keyshortcuts="Control+Enter Meta+Enter"
+                title="SQL 실행 (Ctrl 또는 ⌘ + Enter)">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M4 2.7a.7.7 0 0 1 1.08-.59l8.21 5.29a.7.7 0 0 1 0 1.18l-8.21 5.3A.7.7 0 0 1 4 13.3Z"/>
+          </svg>
+          <span>실행</span>
+        </button>
+      </div>
+      <textarea id="sql" rows="6" spellcheck="false" autocapitalize="off" autocomplete="off"
+                placeholder="SELECT * FROM users LIMIT 100;" required></textarea>
+    </form>
+
+    <section class="results" aria-labelledby="results-title">
+      <div class="section-heading">
+        <h2 class="section-title" id="results-title">결과</h2>
+        <span id="timing" class="timing"></span>
+      </div>
+      <p id="status" class="status" role="status"></p>
+      <p id="error" class="error" role="alert" hidden></p>
+      <div id="output" class="output"></div>
+      <nav id="pages" class="pages" aria-label="결과 페이지" hidden>
+        <button class="secondary" id="previous" type="button">이전</button>
+        <span id="page-label"></span>
+        <button class="secondary" id="next" type="button">다음</button>
+      </nav>
+    </section>
+  </main>
+</body>
+</html>

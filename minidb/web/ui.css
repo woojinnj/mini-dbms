@@ -1,0 +1,164 @@
+:root {
+  color-scheme: light;
+  --paper: #f7f7f4;
+  --white: #fff;
+  --ink: #1d2320;
+  --muted: #545c55;
+  --border: #d2d7d1;
+  --line: #e3e6e0;
+  --accent: #275442;
+  --accent-hover: #1b4132;
+  --sans: system-ui, -apple-system, "Apple SD Gothic Neo", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  background: var(--paper);
+  color: var(--ink);
+  font: 18px / 1.5 var(--sans);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; }
+h1, h2, p { margin: 0; }
+button, input, select, textarea { font: inherit; color: inherit; }
+
+.workspace {
+  width: min(1120px, calc(100% - 96px));
+  margin-inline: auto;
+  padding-block: 44px 64px;
+}
+
+.workspace-header, .section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.workspace-header {
+  padding-bottom: 24px;
+  margin-bottom: 34px;
+  border-bottom: 1px solid var(--border);
+}
+
+h1 {
+  font-size: clamp(38px, 5vw, 52px);
+  font-weight: 720;
+  line-height: 1.06;
+  letter-spacing: -.055em;
+}
+
+.table-picker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-weight: 550;
+}
+
+select, input {
+  min-height: 44px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 12px;
+}
+
+select {
+  width: min(190px, 28vw);
+  color: var(--ink);
+  font-family: var(--mono);
+}
+
+.section-heading { margin-bottom: 13px; }
+.section-title { font-size: 25px; font-weight: 700; letter-spacing: -.035em; }
+
+button {
+  min-height: 44px;
+  padding: 7px 16px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.run {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 104px;
+  background: var(--accent);
+  color: var(--white);
+}
+
+.run:hover:enabled { background: var(--accent-hover); }
+.secondary { background: var(--white); border-color: var(--border); }
+.secondary:hover:enabled { border-color: var(--muted); }
+button:disabled { cursor: default; opacity: .58; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+textarea {
+  display: block;
+  width: 100%;
+  min-height: 180px;
+  padding: 19px 21px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-family: var(--mono);
+  font-size: 20px;
+  line-height: 1.55;
+  resize: vertical;
+  tab-size: 4;
+}
+
+.auth {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: -10px 0 26px;
+}
+.auth input { flex: 1; min-width: 140px; max-width: 340px; }
+.results { margin-top: 35px; }
+.timing, .status, .pages span { color: var(--muted); font-variant-numeric: tabular-nums; }
+.status:empty, .output:empty { display: none; }
+.status { margin-bottom: 12px; }
+.error { border-left: 3px solid var(--ink); padding: 10px 14px; background: var(--white); overflow-wrap: anywhere; }
+
+.table-scroll {
+  max-height: min(55vh, 560px);
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--white);
+}
+
+table { width: 100%; border-collapse: separate; border-spacing: 0; }
+th, td { padding: 12px 17px; text-align: left; border-bottom: 1px solid var(--line); }
+th {
+  position: sticky;
+  top: 0;
+  background: #eef0eb;
+  font-weight: 680;
+  white-space: nowrap;
+}
+td { min-width: 64px; max-width: 440px; white-space: pre-wrap; overflow-wrap: break-word; }
+tr:last-child td { border-bottom: 0; }
+.null { color: var(--muted); font-style: italic; }
+.pages { display: flex; align-items: center; justify-content: flex-end; gap: 14px; margin-top: 14px; }
+
+@media (max-width: 600px) {
+  .workspace { width: calc(100% - 32px); padding-block: 26px 38px; }
+  .workspace-header { margin-bottom: 23px; padding-bottom: 19px; }
+  .table-picker { gap: 8px; }
+  select { width: min(140px, 35vw); }
+  textarea { padding: 14px 15px; font-size: 18px; }
+  .results { margin-top: 26px; }
+  th, td { padding-inline: 13px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button { transition: none; }
+}

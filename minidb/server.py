@@ -3,6 +3,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import hmac
+from importlib.resources import files
 import json
 import logging
 import socket
@@ -15,6 +16,23 @@ from .sql import MAX_SQL_BYTES
 
 MAX_BODY = 3 * 1024 * 1024
 LOG = logging.getLogger("minidb.http")
+UI_JSON = "application/vnd.minidb.ui+json"
+UI_FILES = {
+    "/": ("index.html", "text/html; charset=utf-8"),
+    "/ui.css": ("ui.css", "text/css; charset=utf-8"),
+    "/ui.js": ("ui.js", "text/javascript; charset=utf-8"),
+}
+
+
+def browser_values(value):
+    # Keep 64-bit INTEGER values exact when the browser decodes JSON.
+    if type(value) is int and abs(value) >= 2**53:
+        return str(value)
+    if isinstance(value, dict):
+        return {key: browser_values(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [browser_values(item) for item in value]
+    return value
 
 
 class PoolHTTPServer(HTTPServer):
@@ -106,13 +124,18 @@ class QueryHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         LOG.info("%s %s", self.client_address[0], format % args)
 
-    def reply(self, status, payload):
+    def reply(self, status, payload, content_type="application/json"):
         body = json.dumps(payload, ensure_ascii=False, allow_nan=False).encode("utf-8")
+        self.send_body(status, body, f"{content_type}; charset=utf-8")
+
+    def send_body(self, status, body, content_type, headers=None):
         self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Connection", "close")
         self.send_header("X-Content-Type-Options", "nosniff")
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.end_headers()
         self.close_connection = True  # One request per job; idle keep-alives cannot hold workers.
         self.wfile.write(body)
@@ -133,6 +156,16 @@ class QueryHandler(BaseHTTPRequestHandler):
         return True
 
     def do_GET(self):
+        if self.path in UI_FILES:
+            # The UI shell is public so it can ask for the API token when needed.
+            name, content_type = UI_FILES[self.path]
+            body = files(__package__).joinpath("web", name).read_bytes()
+            self.send_body(200, body, content_type, {
+                "Cache-Control": "no-cache",
+                "Content-Security-Policy": "default-src 'none'; script-src 'self'; style-src 'self'; "
+                                           "connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+            })
+            return
         if not self.authorized():
             return
         if self.path == "/health":
@@ -197,4 +230,7 @@ class QueryHandler(BaseHTTPRequestHandler):
             LOG.exception("Query failed")
             self.error(500, "INTERNAL_ERROR", "Unexpected server error")
         else:
-            self.reply(200, {"result": result})
+            if self.headers.get("Accept") == UI_JSON:
+                self.reply(200, {"result": browser_values(result)}, UI_JSON)
+            else:
+                self.reply(200, {"result": result})

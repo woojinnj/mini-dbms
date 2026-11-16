@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import patch
 
 from minidb import Database
-from minidb.server import MAX_BODY, PoolHTTPServer
+from minidb.server import MAX_BODY, UI_JSON, PoolHTTPServer
 
 
 class ServerTests(unittest.TestCase):
@@ -85,6 +85,35 @@ class ServerTests(unittest.TestCase):
         self.server.token = "test-secret"
         self.assertEqual(self.request("/health", method="GET")[0], 401)
         self.assertEqual(self.request("/health", method="GET", headers={"Authorization": "Bearer test-secret"})[0], 200)
+
+    def test_browser_assets_load_before_api_authentication(self):
+        self.server.token = "test-secret"
+        connection = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
+        try:
+            for path, mime, marker in (
+                ("/", "text/html", b'<textarea id="sql"'),
+                ("/ui.css", "text/css", b".workspace"),
+                ("/ui.js", "text/javascript", b'fetch(path'),
+            ):
+                with self.subTest(path=path):
+                    connection.request("GET", path)
+                    response = connection.getresponse()
+                    self.assertEqual(response.status, 200)
+                    self.assertEqual(response.headers.get_content_type(), mime)
+                    self.assertIn(marker, response.read())
+        finally:
+            connection.close()
+        self.assertEqual(self.request(payload={"sql": "SELECT * FROM users"})[0], 401)
+
+    def test_browser_response_preserves_large_integer_values(self):
+        self.db.execute("INSERT INTO users VALUES ('large', 9223372036854775807, NULL)")
+        payload = {"sql": "SELECT age FROM users"}
+        status, body = self.request(payload=payload, headers={"Content-Type": "application/json", "Accept": UI_JSON})
+        self.assertEqual(status, 200)
+        self.assertEqual(body["result"]["rows"], [{"age": "9223372036854775807"}])
+        status, body = self.request(payload=payload)
+        self.assertEqual(status, 200)
+        self.assertEqual(body["result"]["rows"], [{"age": 9223372036854775807}])
 
     def test_concurrent_http_inserts_and_reads(self):
         def work(i):

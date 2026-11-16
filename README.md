@@ -25,7 +25,9 @@ python3 scripts/benchmark.py --rows 1000000 --output benchmarks/latest.json
 python3 -m minidb serve --host 127.0.0.1 --port 8080 --workers 8 --queue-size 32
 ```
 
-`demo.sql`은 실행할 때마다 3행을 추가합니다. 같은 DB 디렉터리를 여는 프로세스는 한 개만 허용합니다. 서버가 실행 중이면 SQL은 HTTP API로 보내세요. 종료는 Ctrl+C이며, 이미 접수한 요청을 처리한 후 DB 잠금을 해제합니다.
+`demo.sql`은 실행할 때마다 3행을 추가합니다. 같은 DB 디렉터리를 여는 프로세스는 한 개만 허용합니다. 서버가 실행 중이면 브라우저 GUI나 HTTP API로 SQL을 보내세요. 종료는 Ctrl+C이며, 이미 접수한 요청을 처리한 후 DB 잠금을 해제합니다.
+
+**브라우저 GUI**는 서버를 실행한 뒤 [127.0.0.1:8080](http://127.0.0.1:8080/)을 열면 됩니다. 테이블을 선택해 조회문을 불러오고 SQL을 한 문장씩 실행할 수 있습니다. 실행 단축키는 Ctrl+Enter 또는 ⌘+Enter입니다. `MINIDB_API_TOKEN`을 설정했다면 화면에서 토큰을 입력합니다.
 
 다른 터미널에서:
 
@@ -43,7 +45,7 @@ curl -s http://127.0.0.1:8080/query \
 curl -s http://127.0.0.1:8080/metrics
 ```
 
-외부 머신에서 연결하려면 `--host 0.0.0.0`을 사용하고 서버 IP로 접속합니다. 선택적으로 `MINIDB_API_TOKEN` 환경 변수를 설정하면 모든 엔드포인트가 `Authorization: Bearer <token>`을 요구합니다. HTTP API 규격은 [API 문서](docs/api.md)와 [OpenAPI](docs/openapi.yaml)를 참고하세요.
+외부 머신에서 연결하려면 `--host 0.0.0.0`을 사용하고 서버 IP로 접속합니다. 선택적으로 `MINIDB_API_TOKEN` 환경 변수를 설정하면 API 엔드포인트가 `Authorization: Bearer <token>`을 요구합니다. HTTP API 규격은 [API 문서](docs/api.md)와 [OpenAPI](docs/openapi.yaml)를 참고하세요.
 
 ## 과제 요구사항과 구현 위치
 
