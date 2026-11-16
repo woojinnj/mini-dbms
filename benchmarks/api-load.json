@@ -1,0 +1,28 @@
+{
+  "timestamp_utc": "2026-11-16T01:17:47.537802+00:00",
+  "python": "3.13.2",
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "clients": 16,
+  "workers": 8,
+  "insert_select_pairs": 500,
+  "requests": 1000,
+  "durable_fsync": true,
+  "elapsed_seconds": 0.17521545899990087,
+  "requests_per_second": 5707.258969658412,
+  "latency_median_ms": 2.623146,
+  "latency_p95_ms": 4.169417,
+  "persisted_rows_verified": 500,
+  "graceful_shutdown_verified": true,
+  "metrics": {
+    "accepted": 1002,
+    "rejected": 0,
+    "active": 1,
+    "peak_active": 8,
+    "completed": 1001,
+    "queries": 1000,
+    "errors": 0,
+    "workers": 8,
+    "queue_capacity": 32,
+    "uptime_seconds": 0.181
+  }
+}

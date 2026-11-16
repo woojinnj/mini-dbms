@@ -1,0 +1,54 @@
+{
+  "timestamp_utc": "2026-11-16T01:18:03.977300+00:00",
+  "python": "3.13.2",
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "rows": 1000000,
+  "batch_size": 1000,
+  "durable_fsync": true,
+  "insert_seconds": 7.984642375000021,
+  "insert_rows_per_second": 125240.42443416225,
+  "table_file_bytes": 84594696,
+  "restart_rebuild_seconds": 2.619033124999987,
+  "indexed_median_ms": 0.057083,
+  "linear_median_ms": 1509.066416,
+  "median_speedup": 26436.354361193346,
+  "methodology": "Same SQL parser and executor; unique email vs ID; identical results; warm OS cache; alternating query order; complete scan without LIMIT; wall clock includes parsing. Insertion uses multi-row SQL statements, one fsync per statement when durable.",
+  "samples": [
+    {
+      "id": 124907,
+      "indexed_ms": 0.057083,
+      "linear_ms": 1509.066416,
+      "indexed_rows_examined": 1,
+      "linear_rows_examined": 1000000
+    },
+    {
+      "id": 335004,
+      "indexed_ms": 0.124458,
+      "linear_ms": 1512.24,
+      "indexed_rows_examined": 1,
+      "linear_rows_examined": 1000000
+    },
+    {
+      "id": 526926,
+      "indexed_ms": 0.05475,
+      "linear_ms": 1507.429709,
+      "indexed_rows_examined": 1,
+      "linear_rows_examined": 1000000
+    },
+    {
+      "id": 997555,
+      "indexed_ms": 0.11075,
+      "linear_ms": 1481.532209,
+      "indexed_rows_examined": 1,
+      "linear_rows_examined": 1000000
+    },
+    {
+      "id": 536686,
+      "indexed_ms": 0.052875,
+      "linear_ms": 1524.433167,
+      "indexed_rows_examined": 1,
+      "linear_rows_examined": 1000000
+    }
+  ]
+}

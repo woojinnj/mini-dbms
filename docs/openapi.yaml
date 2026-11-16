@@ -1,0 +1,172 @@
+openapi: 3.0.3
+info:
+  title: Mini DBMS API
+  version: 1.0.0
+  description: File-backed SQL engine with a B+ tree and bounded thread pool.
+servers:
+  - url: http://127.0.0.1:8080
+security:
+  - {}
+  - bearerAuth: []
+paths:
+  /query:
+    post:
+      operationId: executeSQL
+      summary: Execute one INSERT, SELECT or EXPLAIN SELECT statement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sql]
+              additionalProperties: false
+              properties:
+                sql:
+                  type: string
+                  description: At most 2 MiB when encoded as UTF-8.
+                  example: SELECT * FROM users WHERE id = 1
+      responses:
+        '200':
+          description: Query completed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [result]
+                properties:
+                  result:
+                    $ref: '#/components/schemas/QueryResult'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '408':
+          $ref: '#/components/responses/Error'
+        '411':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+        '503':
+          description: Worker pool and waiting queue are full
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                example: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /health:
+    get:
+      operationId: getHealth
+      summary: Server liveness
+      responses:
+        '200':
+          description: Server is responding
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+                  tables:
+                    type: array
+                    items:
+                      type: string
+        '401':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+  /metrics:
+    get:
+      operationId: getMetrics
+      summary: Thread pool counters and configuration
+      responses:
+        '200':
+          description: Current metrics (including this request)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: number
+        '401':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Required on all endpoints only when MINIDB_API_TOKEN is configured.
+  responses:
+    Error:
+      description: Request failed; see error code and message
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+    QueryResult:
+      type: object
+      required: [command, elapsed_ms]
+      properties:
+        command:
+          type: string
+          enum: [SELECT, INSERT, EXPLAIN]
+        elapsed_ms:
+          type: number
+        columns:
+          type: array
+          items:
+            type: string
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        row_count:
+          type: integer
+        rows_examined:
+          type: integer
+        plan:
+          type: string
+          enum: [BPLUS_POINT_LOOKUP, BPLUS_RANGE_SCAN, FULL_TABLE_SCAN]
+        truncated:
+          type: boolean
+        affected_rows:
+          type: integer
+        first_id:
+          type: integer
+          format: int64
+        last_id:
+          type: integer
+          format: int64
+        table:
+          type: string
+        table_rows:
+          type: integer
+        index:
+          type: string
+          nullable: true

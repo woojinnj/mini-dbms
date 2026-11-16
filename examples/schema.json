@@ -1,0 +1,12 @@
+{
+  "users": {
+    "name": {"type": "TEXT", "nullable": false},
+    "age": {"type": "INTEGER", "nullable": false},
+    "email": {"type": "TEXT", "nullable": true}
+  },
+  "products": {
+    "name": {"type": "TEXT", "nullable": false},
+    "price": {"type": "REAL", "nullable": false},
+    "available": {"type": "BOOLEAN", "nullable": false}
+  }
+}
