@@ -10,7 +10,6 @@ import os
 from pathlib import Path
 import platform
 import re
-import selectors
 import statistics
 import subprocess
 import sys
@@ -22,26 +21,44 @@ sys.path.insert(0, str(ROOT))
 from minidb import Database
 
 
-def run(pairs, clients, workers):
+def wait_for_port(process, stdout_path, stderr_path, timeout):
+    deadline = time.monotonic() + timeout
+    while True:
+        returncode = process.poll()
+        if returncode is not None:
+            failure = f"Server exited before startup (exit code {returncode})"
+            break
+
+        # Check a regular file so readiness does not depend on pipe events.
+        stdout = stdout_path.read_text(encoding="utf-8", errors="replace")
+        match = re.search(r"^MiniDB listening on http://127\.0\.0\.1:(\d+) [^\n]*\n", stdout, re.MULTILINE)
+        if match:
+            return int(match[1])
+
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            failure = f"Server startup timed out after {timeout}s (pid {process.pid})"
+            break
+        time.sleep(min(remaining, 0.05))
+
+    stdout = stdout_path.read_text(encoding="utf-8", errors="replace").strip()
+    stderr = stderr_path.read_text(encoding="utf-8", errors="replace").strip()
+    raise RuntimeError(f"{failure}\nServer stdout:\n{stdout or '(empty)'}\nServer stderr:\n{stderr or '(empty)'}")
+
+
+def run(pairs, clients, workers, startup_timeout=60):
     with tempfile.TemporaryDirectory(prefix="minidb-api-") as directory:
         environment = dict(os.environ)
         environment.pop("MINIDB_API_TOKEN", None)
-        with open(Path(directory) / "server.log", "w+") as log:
+        stdout_path = Path(directory) / "server.stdout.log"
+        stderr_path = Path(directory) / "server.stderr.log"
+        with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
             process = subprocess.Popen(
-                [sys.executable, "-m", "minidb", "--data-dir", directory, "serve", "--port", "0",
+                [sys.executable, "-u", "-m", "minidb", "--data-dir", directory, "serve", "--port", "0",
                  "--workers", str(workers), "--queue-size", str(max(32, clients * 2))],
-                cwd=ROOT, stdout=subprocess.PIPE, stderr=log, text=True, env=environment)
+                cwd=ROOT, stdout=stdout, stderr=stderr, env=environment)
             try:
-                with selectors.DefaultSelector() as selector:
-                    selector.register(process.stdout, selectors.EVENT_READ)
-                    if not selector.select(timeout=15):
-                        raise RuntimeError("Server startup timed out")
-                ready = process.stdout.readline()
-                match = re.search(r"http://127\.0\.0\.1:(\d+)", ready)
-                if not match:
-                    log.seek(0)
-                    raise RuntimeError(f"Server failed: {ready} {log.read()}")
-                port = int(match[1])
+                port = wait_for_port(process, stdout_path, stderr_path, startup_timeout)
 
                 def request(sql=None, path="/query"):
                     connection = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
@@ -84,7 +101,6 @@ def run(pairs, clients, workers):
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait()
-                process.stdout.close()
             assert process.returncode == 0, f"Server did not shut down gracefully: {process.returncode}"
         with Database(directory) as database:
             assert database.execute("SELECT COUNT(*) FROM users")["rows"] == [{"count": pairs}]
@@ -105,11 +121,13 @@ def main():
     parser.add_argument("--pairs", type=int, default=500)
     parser.add_argument("--clients", type=int, default=16)
     parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--startup-timeout", type=int, default=60,
+                        help="seconds to wait for the server to listen (default: 60)")
     parser.add_argument("--output", type=Path, default=Path("benchmarks/api-load.json"))
     args = parser.parse_args()
-    if min(args.pairs, args.clients, args.workers) < 1:
-        parser.error("pairs, clients and workers must be positive")
-    result = run(args.pairs, args.clients, args.workers)
+    if min(args.pairs, args.clients, args.workers, args.startup_timeout) < 1:
+        parser.error("pairs, clients, workers and startup-timeout must be positive")
+    result = run(args.pairs, args.clients, args.workers, args.startup_timeout)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, indent=2))
